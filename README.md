@@ -1,65 +1,67 @@
-# Prototipo IoT Biométrico
 
-Sistema de control de acceso que combina reconocimiento facial (con verificación de parpadeo) y lectura de huellas dactilares. El proyecto se divide en dos carpetas:
+# Biométrico Yunet 
 
-- **Servidor/**: aplicación Flask que gestiona usuarios, sincroniza el dataset, entrena las codificaciones faciales y expone la interfaz web.
-- **Cliente/**: script para la Raspberry Pi que captura imágenes y huellas, y se comunica por MQTT con el servidor.
+El proyecto parte de un prototipo funcional y se encuentra en proceso de evolución técnica, definiendo un **plan de implementación** para mejorar la precisión, robustez, escalabilidad y seguridad del reconocimiento facial, manteniendo compatibilidad con el hardware IoT existente.
 
-## Requisitos
-- Python 3.10+ con soporte para `venv`.
-- Librerías de sistema necesarias para compilar `dlib` y `opencv` (por ejemplo, encabezados de C/C++).
-- Archivo de modelos `shape_predictor_68_face_landmarks.dat` ubicado en `Servidor/` (obligatorio para la detección facial).
-- Broker MQTT accesible (por defecto `127.0.0.1:1883`).
+---
 
-## Preparación del servidor
-Ejecuta todo dentro de `Servidor/` usando un entorno virtual para aislar dependencias.
+## Arquitectura del sistema
 
-```bash
-cd Servidor
-python -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements_server.txt
-```
+El proyecto se divide en dos componentes principales:
 
-### Inicializar la base de datos y carpetas
-El comando CLI `init-db` crea `database.db`, genera el usuario administrador y prepara el entorno para el dataset.
+- **Servidor/**  
+  Aplicación Flask ejecutada en una PC local, responsable de la gestión de usuarios, base de datos, procesamiento biométrico, identificación, liveness/anti-spoofing y registro de asistencia.
 
-```bash
-export FLASK_APP=app.py
-flask --app app.py init-db
-```
+- **Cliente/**  
+  Aplicación para Raspberry Pi encargada de la captura de imágenes, lectura del sensor de huellas dactilares, interfaz gráfica (pantalla táctil) y comunicación con el servidor mediante MQTT.
 
-- Usuario inicial: **admin / admin**.
-- Se crea `Servidor/dataset/` si no existía.
-- Se envía un comando MQTT para limpiar huellas almacenadas en el sensor.
+---
 
-### Generar `encodings.pickle`
-Asegúrate de contar con fotografías en `Servidor/dataset/<cedula>/<archivo>.jpg` antes de entrenar (el cliente puede generar estas capturas durante el enrolamiento).
+## Reconocimiento facial (plan de implementación)
 
-Ejecuta la tarea completa de entrenamiento desde el CLI de Flask:
+El sistema de reconocimiento facial **se implementará** utilizando un pipeline moderno basado en OpenCV:
 
-```bash
-flask --app app.py shell <<'PY'
-from app import train_encodings_task
-train_encodings_task()
-PY
-```
+- **Detección facial:** OpenCV **YuNet** (modelo ONNX).
+- **Alineación y embeddings:** OpenCV **SFace**.
+- **Identificación:** comparación de embeddings faciales (1:N).
 
-Esto procesará todo el dataset y escribirá `Servidor/encodings.pickle`. El proceso también sincroniza los flags `has_facial` en la base de datos.
+Este enfoque reemplazará métodos tradicionales basados en Haar Cascades y dlib, eliminando dependencias pesadas y mejorando la tolerancia a variaciones de iluminación, pose y distancia. Los embeddings faciales se almacenarán en base de datos y se utilizarán para identificación eficiente en bases de varios miles de usuarios.
 
-### Ejecutar el servidor web
-Usa el mismo entorno virtual y lanza la app directamente para habilitar el listener MQTT y la UI web:
+---
 
-```bash
-python app.py
-```
+## Enrolamiento biométrico
 
-La interfaz estará disponible en `http://localhost:5000`. Ingresa con el usuario administrador para gestionar altas, enrolar biometría y lanzar reentrenamientos manuales desde el panel.
+Durante el enrolamiento facial **planificado**:
 
-## Notas sobre artefactos generados
-- El dataset de fotos y el archivo `encodings.pickle` se regeneran durante el entrenamiento; mantenlos bajo `Servidor/`.
-- Directorios como `__pycache__/` se crearán automáticamente al ejecutar Python; no es necesario versionarlos.
+- Se capturarán múltiples imágenes por usuario (10–15 muestras).
+- Cada imagen será procesada para extraer embeddings faciales.
+- Se almacenará un embedding promedio por usuario junto con un conjunto reducido de embeddings individuales para verificación.
+- El enrolamiento de huella dactilar se mantendrá mediante el sensor AS608.
 
-## Ejecución del cliente (Raspberry Pi)
-En la Raspberry Pi instala las dependencias equivalentes para `Cliente/client_rpi.py` (bibliotecas de cámara, `paho-mqtt`, `opencv`, `pyserial`, etc.). Configura la IP del broker en el script si es distinto al valor por defecto y ejecútalo con Python para empezar a capturar y enviar eventos biométricos.
+Este procedimiento está orientado a mejorar la estabilidad del reconocimiento en condiciones reales.
+
+---
+
+## Liveness y anti-spoofing
+
+El sistema **incorporará** mecanismos de **liveness activo** mediante retos dinámicos (challenge-response), como movimientos controlados del rostro, validados mediante análisis de cambios en la posición facial y landmarks.
+
+De forma opcional, se contempla la integración futura de **anti-spoofing pasivo** mediante modelos de clasificación ejecutados en el servidor local para detectar intentos de suplantación con fotografías o pantallas.
+
+---
+
+## Optimización IoT y comunicaciones
+
+Como parte del plan de mejora:
+
+- El cliente enviará únicamente **recortes faciales** y eventos biométricos relevantes.
+- Se evitará la transmisión continua de video.
+- MQTT se mantendrá como canal de mensajería entre cliente y servidor.
+
+El sistema queda preparado para evolucionar hacia una configuración MQTT segura (TLS y control por dispositivo).
+
+---
+
+## Estado del proyecto
+
+El sistema se encuentra en fase de implementación incremental, tomando como base el prototipo existente. Las mejoras se desarrollan priorizando estabilidad operativa, validación experimental y preparación para uso real en entornos controlados.
